@@ -11,6 +11,18 @@ fn forward_euler_step(last_x: f32, last_y: f32, f: fn(f32, f32) -> f32, delta: f
     (next_x, next_y)
 }
 
+fn rk4_step(last_x: f32, last_y: f32, f: fn(f32, f32) -> f32, delta: f32) -> (f32, f32) {
+    let k1 = f(last_x, last_y);
+    let h2 = delta / 2.0;
+    let x2 = last_x + h2;
+    let k2 = f(last_x, last_y + h2 * k1);
+    let k3 = f(x2, last_y + k2 * h2);
+    let new_x = last_x + delta;
+    let k4 = f(new_x, last_y + k3 * delta);
+    let new_y = last_y + (1.0 / 6.0) * delta * (k1 + 2.0 * k2 + 2.0 * k3 + k4);
+    (new_x, new_y)
+}
+
 #[macroquad::main("Test-o-matic")]
 async fn main() {
     let mut delta_inv: f32 = 10.0; //default to delta_x = 1/10
@@ -97,6 +109,12 @@ async fn main() {
         let forward_points: Vec<(f32, f32)> =
             forward_stream.take_while(|(x, _)| *x <= max_x).collect();
 
+        let rk4_stream = successors(Some((w_x, w_y)), move |(x, y)| {
+            Some(rk4_step(*x, *y, |_x, y| y, delta))
+        });
+
+        let rk4_points : Vec<(f32, f32)> =
+            rk4_stream.take_while(|(x, _)| *x <= max_x).collect();
 
         // draw in the forward points
         for (wx, wy) in forward_points {
@@ -107,6 +125,12 @@ async fn main() {
             }
         }
 
+        for (wx, wy) in rk4_points {
+            draw_circle(wx, wy, pt_size, PURPLE);
+            
+            
+        }
+
         // Calculate the diffeq backwards from (0,1). With Euler's method, it's as easy as picking a negative delta_x!
         let backwards_stream = successors(Some((w_x, w_y)), move |(x, y)| {
             Some(forward_euler_step(*x, *y, |_x, y| y, -1.0 * delta))
@@ -114,12 +138,21 @@ async fn main() {
         let backwards_points: Vec<(f32, f32)> =
             backwards_stream.take_while(|(x, _)| *x >= min_x).collect();
 
+        let backwards_rk4_stream = successors(Some((w_x, w_y)), move |(x, y)| {
+            Some(rk4_step(*x, *y, |_x, y| y, -1.0*delta))
+        });
+
+        let backwards_rk4_points : Vec<(f32, f32)> = backwards_rk4_stream.take_while(|(x, _)| *x >= min_x).collect();
+
         // draw in backward points
         for (wx, wy) in backwards_points {
             draw_circle(wx, wy, pt_size, BLUE);
             
         }
-
+        for (wx, wy) in backwards_rk4_points {
+            draw_circle(wx, wy, pt_size, BLUE);
+            
+        }
 
         // This part just draws in the true graph of y = e^x
         let mut xval = min_x;
