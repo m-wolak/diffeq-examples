@@ -47,6 +47,8 @@ async fn main() {
         
         let w = screen_width();
         let h = screen_height();
+        let mut euler_e = 0.0;
+        let mut rk4_e = 0.0;
         
         let new_ar = (w as f32) / (h as f32);  // check if we need to update the camera
         if new_ar != ar {
@@ -121,16 +123,19 @@ async fn main() {
             draw_circle(wx, wy, pt_size, BLUE);
             
             if f32::abs(wx - 1.0) < 0.00001 {
-                label_str = (-1.0 * wy).to_string();
+                euler_e = -1.0*wy;
             }
         }
 
         for (wx, wy) in rk4_points {
             draw_circle(wx, wy, pt_size, PURPLE);
-            
+            if f32::abs(wx - 1.0) < 0.00001 {
+                rk4_e = -1.0*wy;
+            }
             
         }
 
+        label_str = format!("Euler's e approx: {}, rk4 e approx: {}", euler_e, rk4_e);
         // Calculate the diffeq backwards from (0,1). With Euler's method, it's as easy as picking a negative delta_x!
         let backwards_stream = successors(Some((w_x, w_y)), move |(x, y)| {
             Some(forward_euler_step(*x, *y, |_x, y| y, -1.0 * delta))
@@ -150,7 +155,7 @@ async fn main() {
             
         }
         for (wx, wy) in backwards_rk4_points {
-            draw_circle(wx, wy, pt_size, BLUE);
+            draw_circle(wx, wy, pt_size, PURPLE);
             
         }
 
