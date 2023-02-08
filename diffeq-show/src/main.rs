@@ -3,6 +3,17 @@ use std::iter::successors;
 use macroquad::prelude::*;
 
 const DELTA: f32 = 0.01;
+
+
+fn f(t:f32,x:f32) -> f32 {
+     x*x + 4.0*t
+}
+
+fn slope_zero_line(t:f32) -> f32 {
+    (-4.0*t).sqrt()
+}
+
+
 #[macroquad::main("Test-o-matic")]
 async fn main() {
     let mut click_pos = (0.0, 0.0);
@@ -50,9 +61,11 @@ async fn main() {
             let w_x = world_pt.x;
             let w_y = world_pt.y;
             draw_circle(w_x, w_y, 0.05, RED);
+            
 
-            let forward_points = calc_pts(rk4_step, |x, y| y.exp() - x, w_x, w_y, DELTA, max_x);
-            let forward_points2 = calc_pts(forward_euler_step, |x, y| y.exp() - x, w_x, w_y, DELTA, max_x);
+            
+            let forward_points = calc_pts(rk4_step, f, w_x, w_y, DELTA, max_x);
+            let forward_points2 = calc_pts(forward_euler_step, f, w_x, w_y, DELTA, max_x);
             for i in 1..(forward_points.len()) {
                 let (ox, oy) = forward_points[i - 1];
                 let (wx, wy) = forward_points[i];
@@ -61,7 +74,8 @@ async fn main() {
             }
 
             let backwards_points: Vec<(f32, f32)> =
-                calc_pts(rk4_step, |x, y| y.exp() - x, w_x, w_y, -1.0 * DELTA, min_x);
+                
+                calc_pts(rk4_step, f, w_x, w_y, -1.0 * DELTA, min_x);
             for i in 1..(backwards_points.len()) {
                 let (ox, oy) = backwards_points[i - 1];
                 let (wx, wy) = backwards_points[i];
@@ -70,9 +84,12 @@ async fn main() {
         }
         let drawstep = (max_x - min_x) / 1000.0;
         for i in 0..1000 {
-            let last_x = (i as f32) * drawstep;
-            let this_x = ((i + 1) as f32) * drawstep;
-            draw_line(last_x, last_x.ln(), this_x, this_x.ln(), 0.01, BLACK);
+            let last_x = -1.0*(i as f32) * drawstep;
+            let this_x = -1.0*((i + 1) as f32) * drawstep;
+            
+            draw_line(last_x, slope_zero_line(last_x), this_x, slope_zero_line(this_x), 0.01, BLACK);
+            draw_line(last_x, -1.0*slope_zero_line(last_x), this_x, -1.0*slope_zero_line(this_x), 0.01, BLACK);
+            
         }
 
         next_frame().await
