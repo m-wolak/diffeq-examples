@@ -11,6 +11,8 @@ fn forward_euler_step(last_x: f32, last_y: f32, f: fn(f32, f32) -> f32, delta: f
     (next_x, next_y)
 }
 
+
+// rk4, with the usual constants
 fn rk4_step(last_x: f32, last_y: f32, f: fn(f32, f32) -> f32, delta: f32) -> (f32, f32) {
     let k1 = f(last_x, last_y);
     let h2 = delta / 2.0;
@@ -23,9 +25,26 @@ fn rk4_step(last_x: f32, last_y: f32, f: fn(f32, f32) -> f32, delta: f32) -> (f3
     (new_x, new_y)
 }
 
+// second order runge-kutta, with adjustable constants. lookahead_amt*delta is the time where the initial prediction is checked
+// the usual improved Euler method is done with lookahead_amt = 1.0
+fn rk2_step(lookahead_amt: f32, last_x: f32, last_y: f32, f: fn(f32, f32) -> f32, delta: f32) -> (f32, f32) {
+    let weight2 = 0.5/lookahead_amt;
+    let weight1 = 1.0 - weight2;
+    let k1 = f(last_x,last_y);
+    let h2 = delta*lookahead_amt;
+    let x1 = last_y + h2*k1;
+    let k2 = f(last_x + h2,x1);
+    let new_x = last_x + delta;
+    let new_y = last_y + delta*(weight1*k1 + weight2*k2);
+    (new_x,new_y)
+
+}
+
+
 #[macroquad::main("Test-o-matic")]
 async fn main() {
     let mut delta_inv: f32 = 10.0; //default to delta_x = 1/10
+    let mut lookahead_amt: f32 = 1.0; // how far rk2 looks ahead in its first prediction. 1.0 is "improved Euler"
 
 
     // Set up the camera
@@ -49,6 +68,7 @@ async fn main() {
         let h = screen_height();
         let mut euler_e = 0.0;
         let mut rk4_e = 0.0;
+        let mut rk2_e = 0.0;
         
         let new_ar = (w as f32) / (h as f32);  // check if we need to update the camera
         if new_ar != ar {
@@ -84,9 +104,10 @@ async fn main() {
         );
 
         // set up the slider to change delta_x
-        root_ui().window(321, vec2(10.0, 10.0), vec2(500.0, 60.0), |ui| {
+        root_ui().window(321, vec2(10.0, 10.0), vec2(500.0, 80.0), |ui| {
             ui.slider(123, "1/delta_x", 1.0..100.0, &mut delta_inv);
-            ui.label(None, &label_str)
+            ui.label(None, &label_str);
+            ui.slider(433, "Lookahead amt", -1.0..2.0, &mut lookahead_amt)
         });
         delta_inv = delta_inv.floor(); // we want an integer number of steps per unit time
         
@@ -115,8 +136,14 @@ async fn main() {
             Some(rk4_step(*x, *y, |_x, y| y, delta))
         });
 
+
         let rk4_points : Vec<(f32, f32)> =
             rk4_stream.take_while(|(x, _)| *x <= max_x).collect();
+
+        let rk2_stream = successors(Some((w_x,w_y)), move |(x,y)| {
+            Some(rk2_step(lookahead_amt, *x, *y, |_x,y| y, delta))
+        });
+        let rk2_points : Vec<(f32,f32)> = rk2_stream.take_while(|(x,_)| *x <= max_x).collect();
 
         // draw in the forward points
         for (wx, wy) in forward_points {
@@ -134,8 +161,13 @@ async fn main() {
             }
             
         }
-
-        label_str = format!("Euler's e approx: {}, rk4 e approx: {}", euler_e, rk4_e);
+        for(wx,wy) in rk2_points {
+            draw_circle(wx, wy, pt_size, ORANGE);
+            if f32::abs(wx - 1.0) < 0.00001 {
+                rk2_e = -1.0*wy;
+            }
+        }
+        label_str = format!("Euler's e: {}, rk4 e: {}, rk2 e: {}", euler_e, rk4_e,rk2_e);
         // Calculate the diffeq backwards from (0,1). With Euler's method, it's as easy as picking a negative delta_x!
         let backwards_stream = successors(Some((w_x, w_y)), move |(x, y)| {
             Some(forward_euler_step(*x, *y, |_x, y| y, -1.0 * delta))
@@ -149,6 +181,12 @@ async fn main() {
 
         let backwards_rk4_points : Vec<(f32, f32)> = backwards_rk4_stream.take_while(|(x, _)| *x >= min_x).collect();
 
+        let backwards_rk2_stream = successors(Some((w_x, w_y)), move |(x, y)| {
+            Some(rk2_step(lookahead_amt, *x, *y, |_x, y| y, -1.0*delta))
+        });
+
+        let backwards_rk2_points : Vec<(f32, f32)> = backwards_rk2_stream.take_while(|(x, _)| *x >= min_x).collect();
+
         // draw in backward points
         for (wx, wy) in backwards_points {
             draw_circle(wx, wy, pt_size, BLUE);
@@ -156,6 +194,10 @@ async fn main() {
         }
         for (wx, wy) in backwards_rk4_points {
             draw_circle(wx, wy, pt_size, PURPLE);
+            
+        }
+        for (wx, wy) in backwards_rk2_points {
+            draw_circle(wx, wy, pt_size, ORANGE);
             
         }
 
